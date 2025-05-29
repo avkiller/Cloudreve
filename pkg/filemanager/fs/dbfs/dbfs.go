@@ -45,7 +45,7 @@ type (
 func NewDatabaseFS(u *ent.User, fileClient inventory.FileClient, shareClient inventory.ShareClient,
 	l logging.Logger, ls lock.LockSystem, settingClient setting.Provider,
 	storagePolicyClient inventory.StoragePolicyClient, hasher hashid.Encoder, userClient inventory.UserClient,
-	cache, stateKv cache.Driver) fs.FileSystem {
+	cache, stateKv cache.Driver, directLinkClient inventory.DirectLinkClient) fs.FileSystem {
 	return &DBFS{
 		user:                u,
 		navigators:          make(map[string]Navigator),
@@ -59,6 +59,7 @@ func NewDatabaseFS(u *ent.User, fileClient inventory.FileClient, shareClient inv
 		userClient:          userClient,
 		cache:               cache,
 		stateKv:             stateKv,
+		directLinkClient:    directLinkClient,
 	}
 }
 
@@ -69,6 +70,7 @@ type DBFS struct {
 	userClient          inventory.UserClient
 	storagePolicyClient inventory.StoragePolicyClient
 	shareClient         inventory.ShareClient
+	directLinkClient    inventory.DirectLinkClient
 	l                   logging.Logger
 	ls                  lock.LockSystem
 	settingClient       setting.Provider
@@ -448,7 +450,7 @@ func (f *DBFS) Get(ctx context.Context, path *fs.URI, opts ...fs.Option) (fs.Fil
 		return nil, fmt.Errorf("failed to get target file: %w", err)
 	}
 
-	if o.notRoot && target.IsRootFolder() {
+	if o.notRoot && (target == nil || target.IsRootFolder()) {
 		return nil, fs.ErrNotSupportedAction.WithError(fmt.Errorf("cannot operate root file"))
 	}
 

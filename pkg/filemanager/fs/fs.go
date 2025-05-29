@@ -93,6 +93,10 @@ type (
 		//  - `delete` is false: set version as current version;
 		//  - `delete` is true: delete version.
 		VersionControl(ctx context.Context, path *URI, versionId int, delete bool) error
+		// GetFileFromDirectLink gets a file from a direct link.
+		GetFileFromDirectLink(ctx context.Context, dl *ent.DirectLink) (File, error)
+		// TraverseFile traverses a file to its root file, return the file with linked root.
+		TraverseFile(ctx context.Context, fileID int) (File, error)
 	}
 
 	UploadManager interface {
