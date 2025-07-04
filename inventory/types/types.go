@@ -177,6 +177,8 @@ type (
 	ShareProps struct {
 		// Whether to share view setting from owner
 		ShareView bool `json:"share_view,omitempty"`
+		// Whether to automatically show readme file in share view
+		ShowReadMe bool `json:"show_read_me,omitempty"`
 	}
 
 	FileTypeIconSetting struct {
@@ -286,6 +288,7 @@ type Viewer struct {
 	MaxSize     int64                              `json:"max_size,omitempty"`
 	Disabled    bool                               `json:"disabled,omitempty"`
 	Templates   []NewFileTemplate                  `json:"templates,omitempty"`
+	Platform    string                             `json:"platform,omitempty"`
 }
 
 type ViewerGroup struct {
