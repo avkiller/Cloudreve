@@ -245,7 +245,10 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 		{
 			source.GET(":id/:name",
 				middleware.HashID(hashid.SourceLinkID),
-				controllers.AnonymousPermLink)
+				controllers.AnonymousPermLink(false))
+			source.GET("d/:id/:name",
+				middleware.HashID(hashid.SourceLinkID),
+				controllers.AnonymousPermLink(true))
 		}
 
 		shareShort := r.Group("s")
@@ -487,6 +490,12 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 			callback.GET(
 				"s3/:sessionID/:key",
 				middleware.UseUploadSession(types.PolicyTypeS3),
+				controllers.ProcessCallback(http.StatusBadRequest, false),
+			)
+			// 金山 ks3策略上传回调
+			callback.GET(
+				"ks3/:sessionID/:key",
+				middleware.UseUploadSession(types.PolicyTypeKs3),
 				controllers.ProcessCallback(http.StatusBadRequest, false),
 			)
 			// Huawei OBS upload callback
@@ -853,6 +862,11 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					queue.POST("batch/delete",
 						controllers.FromJSON[adminsvc.BatchTaskService](adminsvc.BatchTaskParamCtx{}),
 						controllers.AdminBatchDeleteTask,
+					)
+					// Cleanup tasks
+					queue.POST("cleanup",
+						controllers.FromJSON[adminsvc.CleanupTaskService](adminsvc.CleanupTaskParameterCtx{}),
+						controllers.AdminCleanupTask,
 					)
 					// // 列出任务
 					// queue.POST("list", controllers.AdminListTask)
