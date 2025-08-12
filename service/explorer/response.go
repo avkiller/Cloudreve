@@ -250,12 +250,15 @@ type DirectLink struct {
 }
 
 type StoragePolicy struct {
-	ID            string           `json:"id"`
-	Name          string           `json:"name"`
-	AllowedSuffix []string         `json:"allowed_suffix,omitempty"`
-	Type          types.PolicyType `json:"type"`
-	MaxSize       int64            `json:"max_size"`
-	Relay         bool             `json:"relay,omitempty"`
+	ID                string           `json:"id"`
+	Name              string           `json:"name"`
+	AllowedSuffix     []string         `json:"allowed_suffix,omitempty"`
+	DeniedSuffix      []string         `json:"denied_suffix,omitempty"`
+	AllowedNameRegexp string           `json:"allowed_name_regexp,omitempty"`
+	DeniedNameRegexp  string           `json:"denied_name_regexp,omitempty"`
+	Type              types.PolicyType `json:"type"`
+	MaxSize           int64            `json:"max_size"`
+	Relay             bool             `json:"relay,omitempty"`
 }
 
 type Entity struct {
@@ -268,19 +271,20 @@ type Entity struct {
 }
 
 type Share struct {
-	ID              string          `json:"id"`
-	Name            string          `json:"name,omitempty"`
-	RemainDownloads *int            `json:"remain_downloads,omitempty"`
-	Visited         int             `json:"visited"`
-	Downloaded      int             `json:"downloaded,omitempty"`
-	Expires         *time.Time      `json:"expires,omitempty"`
-	Unlocked        bool            `json:"unlocked"`
-	SourceType      *types.FileType `json:"source_type,omitempty"`
-	Owner           user.User       `json:"owner"`
-	CreatedAt       time.Time       `json:"created_at,omitempty"`
-	Expired         bool            `json:"expired"`
-	Url             string          `json:"url"`
-	ShowReadMe      bool            `json:"show_readme,omitempty"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name,omitempty"`
+	RemainDownloads   *int            `json:"remain_downloads,omitempty"`
+	Visited           int             `json:"visited"`
+	Downloaded        int             `json:"downloaded,omitempty"`
+	Expires           *time.Time      `json:"expires,omitempty"`
+	Unlocked          bool            `json:"unlocked"`
+	PasswordProtected bool            `json:"password_protected,omitempty"`
+	SourceType        *types.FileType `json:"source_type,omitempty"`
+	Owner             user.User       `json:"owner"`
+	CreatedAt         time.Time       `json:"created_at,omitempty"`
+	Expired           bool            `json:"expired"`
+	Url               string          `json:"url"`
+	ShowReadMe        bool            `json:"show_readme,omitempty"`
 
 	// Only viewable by owner
 	IsPrivate bool   `json:"is_private,omitempty"`
@@ -298,15 +302,16 @@ func BuildShare(s *ent.Share, base *url.URL, hasher hashid.Encoder, requester *e
 		redactLevel = user.RedactLevelUser
 	}
 	res := Share{
-		Name:       name,
-		ID:         hashid.EncodeShareID(hasher, s.ID),
-		Unlocked:   unlocked,
-		Owner:      user.BuildUserRedacted(owner, redactLevel, hasher),
-		Expired:    inventory.IsShareExpired(s) != nil || expired,
-		Url:        BuildShareLink(s, hasher, base),
-		CreatedAt:  s.CreatedAt,
-		Visited:    s.Views,
-		SourceType: util.ToPtr(t),
+		Name:              name,
+		ID:                hashid.EncodeShareID(hasher, s.ID),
+		Unlocked:          unlocked,
+		Owner:             user.BuildUserRedacted(owner, redactLevel, hasher),
+		Expired:           inventory.IsShareExpired(s) != nil || expired,
+		Url:               BuildShareLink(s, hasher, base, unlocked),
+		CreatedAt:         s.CreatedAt,
+		Visited:           s.Views,
+		SourceType:        util.ToPtr(t),
+		PasswordProtected: s.Password != "",
 	}
 
 	if unlocked {
@@ -433,23 +438,42 @@ func BuildEntity(extendedInfo *fs.FileExtendedInfo, e fs.Entity, hasher hashid.E
 	}
 }
 
-func BuildShareLink(s *ent.Share, hasher hashid.Encoder, base *url.URL) string {
+func BuildShareLink(s *ent.Share, hasher hashid.Encoder, base *url.URL, unlocked bool) string {
 	shareId := hashid.EncodeShareID(hasher, s.ID)
-	return routes.MasterShareUrl(base, shareId, s.Password).String()
+	if unlocked {
+		return routes.MasterShareUrl(base, shareId, s.Password).String()
+	}
+	return routes.MasterShareUrl(base, shareId, "").String()
 }
 
 func BuildStoragePolicy(sp *ent.StoragePolicy, hasher hashid.Encoder) *StoragePolicy {
 	if sp == nil {
 		return nil
 	}
-	return &StoragePolicy{
-		ID:            hashid.EncodePolicyID(hasher, sp.ID),
-		Name:          sp.Name,
-		Type:          types.PolicyType(sp.Type),
-		MaxSize:       sp.MaxSize,
-		AllowedSuffix: sp.Settings.FileType,
-		Relay:         sp.Settings.Relay,
+
+	res := &StoragePolicy{
+		ID:      hashid.EncodePolicyID(hasher, sp.ID),
+		Name:    sp.Name,
+		Type:    types.PolicyType(sp.Type),
+		MaxSize: sp.MaxSize,
+		Relay:   sp.Settings.Relay,
 	}
+
+	if sp.Settings.IsFileTypeDenyList {
+		res.DeniedSuffix = sp.Settings.FileType
+	} else {
+		res.AllowedSuffix = sp.Settings.FileType
+	}
+
+	if sp.Settings.NameRegexp != "" {
+		if sp.Settings.IsNameRegexpDenyList {
+			res.DeniedNameRegexp = sp.Settings.NameRegexp
+		} else {
+			res.AllowedNameRegexp = sp.Settings.NameRegexp
+		}
+	}
+
+	return res
 }
 
 func WriteEventSourceHeader(c *gin.Context) {

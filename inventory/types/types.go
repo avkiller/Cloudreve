@@ -7,16 +7,19 @@ import (
 // UserSetting 用户其他配置
 type (
 	UserSetting struct {
-		ProfileOff          bool                    `json:"profile_off,omitempty"`
-		PreferredTheme      string                  `json:"preferred_theme,omitempty"`
-		VersionRetention    bool                    `json:"version_retention,omitempty"`
-		VersionRetentionExt []string                `json:"version_retention_ext,omitempty"`
-		VersionRetentionMax int                     `json:"version_retention_max,omitempty"`
-		Pined               []PinedFile             `json:"pined,omitempty"`
-		Language            string                  `json:"email_language,omitempty"`
-		DisableViewSync     bool                    `json:"disable_view_sync,omitempty"`
-		FsViewMap           map[string]ExplorerView `json:"fs_view_map,omitempty"`
+		ProfileOff          bool                     `json:"profile_off,omitempty"`
+		PreferredTheme      string                   `json:"preferred_theme,omitempty"`
+		VersionRetention    bool                     `json:"version_retention,omitempty"`
+		VersionRetentionExt []string                 `json:"version_retention_ext,omitempty"`
+		VersionRetentionMax int                      `json:"version_retention_max,omitempty"`
+		Pined               []PinedFile              `json:"pined,omitempty"`
+		Language            string                   `json:"email_language,omitempty"`
+		DisableViewSync     bool                     `json:"disable_view_sync,omitempty"`
+		FsViewMap           map[string]ExplorerView  `json:"fs_view_map,omitempty"`
+		ShareLinksInProfile ShareLinksInProfileLevel `json:"share_links_in_profile,omitempty"`
 	}
+
+	ShareLinksInProfileLevel string
 
 	PinedFile struct {
 		Uri  string `json:"uri"`
@@ -41,6 +44,12 @@ type (
 		Token string `json:"token"`
 		// 允许的文件扩展名
 		FileType []string `json:"file_type"`
+		// IsFileTypeDenyList Whether above list is a deny list.
+		IsFileTypeDenyList bool `json:"is_file_type_deny_list,omitempty"`
+		// FileRegexp 文件扩展名正则表达式
+		NameRegexp string `json:"file_regexp,omitempty"`
+		// IsNameRegexp Whether above regexp is a deny list.
+		IsNameRegexpDenyList bool `json:"is_name_regexp_deny_list,omitempty"`
 		// OauthRedirect Oauth 重定向地址
 		OauthRedirect string `json:"od_redirect,omitempty"`
 		// CustomProxy whether to use custom-proxy to get file content
@@ -327,4 +336,10 @@ const (
 	CustomPropsTypeMultiSelect = "multi_select"
 	CustomPropsTypeLink        = "link"
 	CustomPropsTypeRating      = "rating"
+)
+
+const (
+	ProfilePublicShareOnly = ShareLinksInProfileLevel("")
+	ProfileAllShare        = ShareLinksInProfileLevel("all_share")
+	ProfileHideShare       = ShareLinksInProfileLevel("hide_share")
 )
