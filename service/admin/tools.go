@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -139,15 +140,16 @@ func (s *TestSMTPService) Test(c *gin.Context) error {
 		return serializer.NewError(serializer.CodeParamErr, "Invalid SMTP port", err)
 	}
 
-	tlsPolicy := mail.TLSOpportunistic
-	if setting.IsTrueValue(s.Settings["smtpEncryption"]) {
-		tlsPolicy = mail.TLSMandatory
-	}
-	d, diaErr := mail.NewClient(s.Settings["smtpHost"],
+	opts := []mail.Option{
 		mail.WithPort(port),
-		mail.WithSMTPAuth(mail.SMTPAuthAutoDiscover), mail.WithTLSPortPolicy(tlsPolicy),
+		mail.WithSMTPAuth(mail.SMTPAuthAutoDiscover), mail.WithTLSPortPolicy(mail.TLSOpportunistic),
 		mail.WithUsername(s.Settings["smtpUser"]), mail.WithPassword(s.Settings["smtpPass"]),
-	)
+	}
+	if setting.IsTrueValue(s.Settings["smtpEncryption"]) {
+		opts = append(opts, mail.WithSSL())
+	}
+
+	d, diaErr := mail.NewClient(s.Settings["smtpHost"], opts...)
 	if diaErr != nil {
 		return serializer.NewError(serializer.CodeInternalSetting, "Failed to create SMTP client: "+diaErr.Error(), diaErr)
 	}
@@ -164,6 +166,13 @@ func (s *TestSMTPService) Test(c *gin.Context) error {
 
 	err = d.DialAndSendWithContext(c, m)
 	if err != nil {
+		// Check if this is an SMTP RESET error after successful delivery
+		var sendErr *mail.SendError
+		var errParsed = errors.As(err, &sendErr)
+		if errParsed && sendErr.Reason == mail.ErrSMTPReset {
+			return nil // Don't treat this as a delivery failure since mail was sent
+		}
+
 		return serializer.NewError(serializer.CodeInternalSetting, "Failed to send test email: "+err.Error(), err)
 	}
 
