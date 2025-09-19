@@ -27,13 +27,6 @@ import (
 	"github.com/cloudreve/Cloudreve/v4/pkg/util"
 	"github.com/gofrs/uuid"
 	"github.com/mholt/archives"
-	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/encoding/korean"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/encoding/traditionalchinese"
-	"golang.org/x/text/encoding/unicode"
 )
 
 type (
@@ -47,14 +40,15 @@ type (
 	}
 	ExtractArchiveTaskPhase string
 	ExtractArchiveTaskState struct {
-		Uri             string `json:"uri,omitempty"`
-		Encoding        string `json:"encoding,omitempty"`
-		Dst             string `json:"dst,omitempty"`
-		TempPath        string `json:"temp_path,omitempty"`
-		TempZipFilePath string `json:"temp_zip_file_path,omitempty"`
-		ProcessedCursor string `json:"processed_cursor,omitempty"`
-		SlaveTaskID     int    `json:"slave_task_id,omitempty"`
-		Password        string `json:"password,omitempty"`
+		Uri             string   `json:"uri,omitempty"`
+		Encoding        string   `json:"encoding,omitempty"`
+		Dst             string   `json:"dst,omitempty"`
+		TempPath        string   `json:"temp_path,omitempty"`
+		TempZipFilePath string   `json:"temp_zip_file_path,omitempty"`
+		ProcessedCursor string   `json:"processed_cursor,omitempty"`
+		SlaveTaskID     int      `json:"slave_task_id,omitempty"`
+		Password        string   `json:"password,omitempty"`
+		FileMask        []string `json:"file_mask,omitempty"`
 		NodeState       `json:",inline"`
 		Phase           ExtractArchiveTaskPhase `json:"phase,omitempty"`
 	}
@@ -78,54 +72,15 @@ func init() {
 	queue.RegisterResumableTaskFactory(queue.ExtractArchiveTaskType, NewExtractArchiveTaskFromModel)
 }
 
-var encodings = map[string]encoding.Encoding{
-	"ibm866":            charmap.CodePage866,
-	"iso8859_2":         charmap.ISO8859_2,
-	"iso8859_3":         charmap.ISO8859_3,
-	"iso8859_4":         charmap.ISO8859_4,
-	"iso8859_5":         charmap.ISO8859_5,
-	"iso8859_6":         charmap.ISO8859_6,
-	"iso8859_7":         charmap.ISO8859_7,
-	"iso8859_8":         charmap.ISO8859_8,
-	"iso8859_8I":        charmap.ISO8859_8I,
-	"iso8859_10":        charmap.ISO8859_10,
-	"iso8859_13":        charmap.ISO8859_13,
-	"iso8859_14":        charmap.ISO8859_14,
-	"iso8859_15":        charmap.ISO8859_15,
-	"iso8859_16":        charmap.ISO8859_16,
-	"koi8r":             charmap.KOI8R,
-	"koi8u":             charmap.KOI8U,
-	"macintosh":         charmap.Macintosh,
-	"windows874":        charmap.Windows874,
-	"windows1250":       charmap.Windows1250,
-	"windows1251":       charmap.Windows1251,
-	"windows1252":       charmap.Windows1252,
-	"windows1253":       charmap.Windows1253,
-	"windows1254":       charmap.Windows1254,
-	"windows1255":       charmap.Windows1255,
-	"windows1256":       charmap.Windows1256,
-	"windows1257":       charmap.Windows1257,
-	"windows1258":       charmap.Windows1258,
-	"macintoshcyrillic": charmap.MacintoshCyrillic,
-	"gbk":               simplifiedchinese.GBK,
-	"gb18030":           simplifiedchinese.GB18030,
-	"big5":              traditionalchinese.Big5,
-	"eucjp":             japanese.EUCJP,
-	"iso2022jp":         japanese.ISO2022JP,
-	"shiftjis":          japanese.ShiftJIS,
-	"euckr":             korean.EUCKR,
-	"utf16be":           unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM),
-	"utf16le":           unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM),
-}
-
 // NewExtractArchiveTask creates a new ExtractArchiveTask
-func NewExtractArchiveTask(ctx context.Context, src, dst, encoding, password string) (queue.Task, error) {
+func NewExtractArchiveTask(ctx context.Context, src, dst, encoding, password string, mask []string) (queue.Task, error) {
 	state := &ExtractArchiveTaskState{
 		Uri:       src,
 		Dst:       dst,
 		Encoding:  encoding,
 		NodeState: NodeState{},
 		Password:  password,
+		FileMask:  mask,
 	}
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
@@ -247,6 +202,7 @@ func (m *ExtractArchiveTask) createSlaveExtractTask(ctx context.Context, dep dep
 		Dst:      m.state.Dst,
 		UserID:   user.ID,
 		Password: m.state.Password,
+		FileMask: m.state.FileMask,
 	}
 
 	payloadStr, err := json.Marshal(payload)
@@ -336,7 +292,7 @@ func (m *ExtractArchiveTask) masterExtractArchive(ctx context.Context, dep depen
 
 	extractor, ok := format.(archives.Extractor)
 	if !ok {
-		return task.StatusError, fmt.Errorf("format not an extractor %s")
+		return task.StatusError, fmt.Errorf("format not an extractor %s", format.Extension())
 	}
 
 	formatExt := format.Extension()
@@ -371,7 +327,7 @@ func (m *ExtractArchiveTask) masterExtractArchive(ctx context.Context, dep depen
 	if zipExtractor, ok := extractor.(archives.Zip); ok {
 		if m.state.Encoding != "" {
 			m.l.Info("Using encoding %q for zip archive", m.state.Encoding)
-			encoding, ok := encodings[strings.ToLower(m.state.Encoding)]
+			encoding, ok := manager.ZipEncodings[strings.ToLower(m.state.Encoding)]
 			if !ok {
 				m.l.Warning("Unknown encoding %q, fallback to default encoding", m.state.Encoding)
 			} else {
@@ -416,6 +372,14 @@ func (m *ExtractArchiveTask) masterExtractArchive(ctx context.Context, dep depen
 		rawPath := util.FormSlash(f.NameInArchive)
 		savePath := dst.JoinRaw(rawPath)
 
+		// If file mask is not empty, check if the path is in the mask
+		if len(m.state.FileMask) > 0 && !isFileInMask(rawPath, m.state.FileMask) {
+			m.l.Warning("File %q is not in the mask, skipping...", f.NameInArchive)
+			atomic.AddInt64(&m.progress[ProgressTypeExtractCount].Current, 1)
+			atomic.AddInt64(&m.progress[ProgressTypeExtractSize].Current, f.Size())
+			return nil
+		}
+
 		// Check if path is legit
 		if !strings.HasPrefix(savePath.Path(), util.FillSlash(path.Clean(dst.Path()))) {
 			m.l.Warning("Path %q is not legit, skipping...", f.NameInArchive)
@@ -445,6 +409,10 @@ func (m *ExtractArchiveTask) masterExtractArchive(ctx context.Context, dep depen
 			Props: &fs.UploadProps{
 				Uri:  savePath,
 				Size: f.Size(),
+				LastModified: func() *time.Time {
+					t := f.FileInfo.ModTime().Local()
+					return &t
+				}(),
 			},
 			ProgressFunc: func(current, diff int64, total int64) {
 				atomic.AddInt64(&m.progress[ProgressTypeExtractSize].Current, diff)
@@ -599,6 +567,7 @@ type (
 		TempZipFilePath string             `json:"temp_zip_file_path,omitempty"`
 		ProcessedCursor string             `json:"processed_cursor,omitempty"`
 		Password        string             `json:"password,omitempty"`
+		FileMask        []string           `json:"file_mask,omitempty"`
 	}
 )
 
@@ -738,7 +707,7 @@ func (m *SlaveExtractArchiveTask) Do(ctx context.Context) (task.Status, error) {
 	if zipExtractor, ok := extractor.(archives.Zip); ok {
 		if m.state.Encoding != "" {
 			m.l.Info("Using encoding %q for zip archive", m.state.Encoding)
-			encoding, ok := encodings[strings.ToLower(m.state.Encoding)]
+			encoding, ok := manager.ZipEncodings[strings.ToLower(m.state.Encoding)]
 			if !ok {
 				m.l.Warning("Unknown encoding %q, fallback to default encoding", m.state.Encoding)
 			} else {
@@ -779,6 +748,12 @@ func (m *SlaveExtractArchiveTask) Do(ctx context.Context) (task.Status, error) {
 		rawPath := util.FormSlash(f.NameInArchive)
 		savePath := dst.JoinRaw(rawPath)
 
+		// If file mask is not empty, check if the path is in the mask
+		if len(m.state.FileMask) > 0 && !isFileInMask(rawPath, m.state.FileMask) {
+			m.l.Debug("File %q is not in the mask, skipping...", f.NameInArchive)
+			return nil
+		}
+
 		// Check if path is legit
 		if !strings.HasPrefix(savePath.Path(), util.FillSlash(path.Clean(dst.Path()))) {
 			atomic.AddInt64(&m.progress[ProgressTypeExtractCount].Current, 1)
@@ -808,6 +783,10 @@ func (m *SlaveExtractArchiveTask) Do(ctx context.Context) (task.Status, error) {
 			Props: &fs.UploadProps{
 				Uri:  savePath,
 				Size: f.Size(),
+				LastModified: func() *time.Time {
+					t := f.FileInfo.ModTime().Local()
+					return &t
+				}(),
 			},
 			ProgressFunc: func(current, diff int64, total int64) {
 				atomic.AddInt64(&m.progress[ProgressTypeExtractSize].Current, diff)
@@ -845,4 +824,18 @@ func (m *SlaveExtractArchiveTask) Progress(ctx context.Context) queue.Progresses
 	m.Lock()
 	defer m.Unlock()
 	return m.progress
+}
+
+func isFileInMask(path string, mask []string) bool {
+	if len(mask) == 0 {
+		return true
+	}
+
+	for _, m := range mask {
+		if path == m || strings.HasPrefix(path, m+"/") {
+			return true
+		}
+	}
+
+	return false
 }
