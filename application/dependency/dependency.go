@@ -376,7 +376,7 @@ func (d *dependency) EventHub() eventhub.EventHub {
 	if d.eventHub != nil {
 		return d.eventHub
 	}
-	d.eventHub = eventhub.NewEventHub(d.UserClient(), d.FsEventClient())
+	d.eventHub = eventhub.NewEventHub(d.UserClient(), d.FsEventClient(), d.SettingProvider())
 	return d.eventHub
 }
 
@@ -491,7 +491,7 @@ func (d *dependency) OAuthClientClient() inventory.OAuthClientClient {
 		return d.oAuthClient
 	}
 
-	return inventory.NewOAuthClientClient(d.DBClient())
+	return inventory.NewOAuthClientClient(d.DBClient(), d.ConfigProvider().Database().Type)
 }
 
 func (d *dependency) MimeDetector(ctx context.Context) mime.MimeDetector {

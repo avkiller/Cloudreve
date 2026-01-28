@@ -208,6 +208,7 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 		静态资源
 	*/
 	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/"})))
+	r.Use(middleware.SharePreview(dep))
 	r.Use(middleware.FrontendFileHandler(dep))
 	r.GET("manifest.json", controllers.Manifest)
 
@@ -334,8 +335,15 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					controllers.ExchangeToken,
 				)
 				oauthRouter.GET("userinfo",
+					middleware.LoginRequired(),
 					controllers.FromQuery[oauth.UserInfoService](oauth.UserInfoParamCtx{}),
 					controllers.OpenIDUserInfo,
+				)
+				oauthRouter.DELETE("grant/:app_id",
+					middleware.LoginRequired(),
+					middleware.RequiredScopes(types.ScopeUserSecurityInfoWrite),
+					controllers.FromUri[oauth.DeleteOAuthGrantService](oauth.DeleteOAuthGrantParamCtx{}),
+					controllers.DeleteOAuthGrant,
 				)
 			}
 
@@ -771,6 +779,9 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 			// Server event push
 			file.GET("events",
 				middleware.LoginRequired(),
+				middleware.IsFunctionEnabled(func(c *gin.Context) bool {
+					return dep.SettingProvider().EventHubEnabled(c)
+				}),
 				controllers.FromQuery[explorer.ExplorerEventService](explorer.ExplorerEventParamCtx{}),
 				controllers.HandleExplorerEventsPush,
 			)
@@ -1035,6 +1046,44 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 						middleware.RequiredScopes(types.ScopeAdminWrite),
 						controllers.FromUri[adminsvc.SingleNodeService](adminsvc.SingleNodeParamCtx{}),
 						controllers.AdminDeleteNode,
+					)
+				}
+
+				oauthClient := admin.Group("oauthClient")
+				{
+					// List OAuth clients
+					oauthClient.POST("",
+						controllers.FromJSON[adminsvc.AdminListService](adminsvc.AdminListServiceParamsCtx{}),
+						controllers.AdminListOAuthClients,
+					)
+					// Get OAuth client
+					oauthClient.GET(":id",
+						controllers.FromUri[adminsvc.SingleOAuthClientService](adminsvc.SingleOAuthClientParamCtx{}),
+						controllers.AdminGetOAuthClient,
+					)
+					// Create OAuth client
+					oauthClient.PUT("",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromJSON[adminsvc.UpsertOAuthClientService](adminsvc.UpsertOAuthClientParamCtx{}),
+						controllers.AdminCreateOAuthClient,
+					)
+					// Update OAuth client
+					oauthClient.PUT(":id",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromJSON[adminsvc.UpsertOAuthClientService](adminsvc.UpsertOAuthClientParamCtx{}),
+						controllers.AdminUpdateOAuthClient,
+					)
+					// Delete OAuth client
+					oauthClient.DELETE(":id",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromUri[adminsvc.SingleOAuthClientService](adminsvc.SingleOAuthClientParamCtx{}),
+						controllers.AdminDeleteOAuthClient,
+					)
+					// Batch delete OAuth clients
+					oauthClient.POST("batch/delete",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
+						controllers.FromJSON[adminsvc.BatchOAuthClientService](adminsvc.BatchOAuthClientParamCtx{}),
+						controllers.AdminBatchDeleteOAuthClient,
 					)
 				}
 
