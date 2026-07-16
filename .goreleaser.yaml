@@ -72,7 +72,9 @@ changelog:
       - "^test:"
 
 release:
-  replace: true
+  replace_existing_artifacts: true
+  replace_existing_draft: true
+  use_existing_draft: true
   draft: true
   prerelease: auto
   target_commitish: "{{ .Commit }}"
