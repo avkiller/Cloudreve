@@ -126,6 +126,8 @@ func ReplaceMagicVar(rawString string, fsSeparator string, pathAvailable bool, b
 			return RandStringRunes(16)
 		case "{randomkey8}":
 			return RandStringRunes(8)
+		case "{randomkey4}":
+			return RandStringRunes(4)
 		case "{timestamp}":
 			return strconv.FormatInt(timeConst.Unix(), 10)
 		case "{timestamp_nano}":
