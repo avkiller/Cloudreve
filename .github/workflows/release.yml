@@ -15,6 +15,7 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -28,7 +29,10 @@ jobs:
         run: |
           chmod +x ./.build/build-assets.sh
           ./.build/build-assets.sh $(git describe --tags)
-
+      - name: Clean git state
+        run: |
+          git checkout -- assets || true
+          git diff --stat   # 打印一下确认真的 clean 了
       - name: Run Goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
