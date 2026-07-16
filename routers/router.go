@@ -671,6 +671,11 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				middleware.ValidateBatchFileCount(dep, explorer.DeleteFileParameterCtx{}),
 				controllers.Delete,
 			)
+			// Empty trash bin
+			file.DELETE("trash",
+				middleware.RequiredScopes(types.ScopeFilesWrite),
+				controllers.EmptyTrash,
+			)
 			// Force unlock
 			file.DELETE("lock",
 				middleware.RequiredScopes(types.ScopeFilesWrite),
@@ -862,10 +867,10 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 		// 需要登录保护的
 		auth := v4.Group("")
 		auth.Use(middleware.LoginRequired())
-		auth.Use(middleware.RequiredScopes(types.ScopeAdminRead))
 		{
 			// 管理
 			admin := auth.Group("admin", middleware.IsAdmin())
+			admin.Use(middleware.RequiredScopes(types.ScopeAdminRead))
 			{
 				admin.GET("summary",
 					controllers.FromQuery[adminsvc.SummaryService](adminsvc.SummaryParamCtx{}),
@@ -923,13 +928,16 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 				tool := admin.Group("tool")
 				{
 					tool.GET("wopi",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
 						controllers.FromQuery[adminsvc.FetchWOPIDiscoveryService](adminsvc.FetchWOPIDiscoveryParamCtx{}),
 						controllers.AdminFetchWopi,
 					)
 					tool.POST("thumbExecutable",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
 						controllers.FromJSON[adminsvc.ThumbGeneratorTestService](adminsvc.ThumbGeneratorTestParamCtx{}),
 						controllers.AdminTestThumbGenerator)
 					tool.POST("mail",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
 						controllers.FromJSON[adminsvc.TestSMTPService](adminsvc.TestSMTPParamCtx{}),
 						controllers.AdminSendTestMail,
 					)
@@ -1006,6 +1014,7 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 					{
 						// 获取 OneDrive OAuth URL
 						oauth.POST("signin",
+							middleware.RequiredScopes(types.ScopeAdminWrite),
 							controllers.FromJSON[adminsvc.GetOauthRedirectService](adminsvc.GetOauthRedirectParamCtx{}),
 							controllers.AdminOdOAuthURL,
 						)
@@ -1047,11 +1056,13 @@ func initMasterRouter(dep dependency.Dep) *gin.Engine {
 						controllers.AdminGetNode,
 					)
 					node.POST("test",
+						middleware.RequiredScopes(types.ScopeAdminWrite),
 						controllers.FromJSON[adminsvc.TestNodeService](adminsvc.TestNodeParamCtx{}),
 						controllers.AdminTestSlave,
 					)
 					node.POST("test/downloader",
 						controllers.FromJSON[adminsvc.TestNodeDownloaderService](adminsvc.TestNodeDownloaderParamCtx{}),
+						middleware.RequiredScopes(types.ScopeAdminWrite),
 						controllers.AdminTestDownloader,
 					)
 					node.PUT("",
