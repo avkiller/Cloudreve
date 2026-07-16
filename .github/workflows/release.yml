@@ -32,7 +32,8 @@ jobs:
       - name: Clean git state
         run: |
           git checkout -- assets || true
-          git diff --stat   # 打印一下确认真的 clean 了
+          git clean -fd
+          git status
       - name: Run Goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
