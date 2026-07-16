@@ -1,0 +1,39 @@
+name: Release Cloudreve for avkiller
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Yarn
+        run: npm install -g yarn
+
+      - name: Build frontend
+        run: |
+          chmod +x ./.build/build-assets.sh
+          ./.build/build-assets.sh $(git describe --tags)
+
+      - name: Run Goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
