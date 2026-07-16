@@ -38,3 +38,6 @@ tmp/
 .devcontainer/
 cloudreve
 .DS_Store
+
+assets/
+application/statics/assets.zip
