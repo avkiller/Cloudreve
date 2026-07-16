@@ -111,7 +111,7 @@ func (m *Migrator) migratePolicy() (map[int]bool, error) {
 			settings.ThumbGeneratorProxy = true
 		}
 
-		mustContain := []string{"{randomkey16}", "{randomkey8}", "{uuid}"}
+		mustContain := []string{"{randomkey16}", "{randomkey8}","{randomkey4}", "{uuid}"}
 		hasRandomElement := false
 		for _, c := range mustContain {
 			if strings.Contains(policy.FileNameRule, c) {
