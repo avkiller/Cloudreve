@@ -72,6 +72,7 @@ changelog:
       - "^test:"
 
 release:
+  overwrite: true
   draft: true
   prerelease: auto
   target_commitish: "{{ .Commit }}"
